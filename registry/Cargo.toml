@@ -1,8 +1,12 @@
 [package]
 name = "registry"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
 
 [dependencies]
 adapter.workspace = true
 kernel.workspace = true
+shared.workspace = true
+mockall.workspace = true
