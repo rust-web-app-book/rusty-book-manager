@@ -4,4 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+shared.workspace = true
 async-trait.workspace = true
+anyhow.workspace = true
+uuid.workspace = true

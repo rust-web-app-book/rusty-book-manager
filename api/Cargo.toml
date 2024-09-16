@@ -4,5 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+kernel.workspace = true
+shared.workspace = true
 registry.workspace = true
 axum.workspace = true
+derive-new.workspace = true
+serde.workspace = true
+anyhow.workspace = true
+uuid.workspace = true
+thiserror.workspace = true
