@@ -188,3 +188,18 @@ args = ["compose", "down"]
 extend = "set-env-docker"
 command = "docker"
 args = ["compose", "down", "-v"]
+
+
+[tasks.create-hash]
+script_runner = "@rust"
+script = '''
+//! ```cargo
+//! [dependencies]
+//! bcrypt = "0.15.1"
+//! ```
+fn main() {
+    let password = &std::env::args().collect::<Vec<String>>()[1];
+    let hashed = bcrypt::hash(password, bcrypt::DEFAULT_COST).unwrap();
+    println!("{}", hashed);
+}
+'''
