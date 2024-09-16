@@ -1,8 +1,10 @@
 use async_trait::async_trait;
 use derive_new::new;
 // 新たに定義した型を追加で use する
+use crate::database::model::book::BookCheckoutRow;
 use crate::database::model::book::{BookRow, PaginatedBookRow};
 use crate::database::ConnectionPool;
+use kernel::model::book::Checkout;
 use kernel::model::{
     id::{BookId, UserId},
     {book::event::DeleteBook, list::PaginatedList},
@@ -15,6 +17,7 @@ use kernel::{
     repository::book::BookRepository,
 };
 use shared::error::{AppError, AppResult};
+use std::collections::HashMap;
 
 #[derive(new)]
 pub struct BookRepositoryImpl {
@@ -95,7 +98,15 @@ impl BookRepository for BookRepositoryImpl {
         .await
         .map_err(AppError::SpecificOperationError)?;
 
-        let items = rows.into_iter().map(Book::from).collect();
+        let book_ids = rows.iter().map(|book| book.book_id).collect::<Vec<_>>();
+        let mut checkouts = self.find_checkouts(&book_ids).await?;
+        let items = rows
+            .into_iter()
+            .map(|row| {
+                let checkout = checkouts.remove(&row.book_id);
+                row.into_book(checkout)
+            })
+            .collect();
 
         Ok(PaginatedList {
             total,
@@ -130,7 +141,13 @@ impl BookRepository for BookRepositoryImpl {
         .await
         .map_err(AppError::SpecificOperationError)?;
 
-        Ok(row.map(Book::from))
+        match row {
+            Some(r) => {
+                let checkout = self.find_checkouts(&[r.book_id]).await?.remove(&r.book_id);
+                Ok(Some(r.into_book(checkout)))
+            }
+            None => Ok(None),
+        }
     }
 
     // update は SQL の UPDATE 文に当てはめているだけであるが、
@@ -189,6 +206,36 @@ impl BookRepository for BookRepositoryImpl {
     }
 }
 
+impl BookRepositoryImpl {
+    // 指定された book_id が貸出中の場合に貸出情報を返すメソッドを追加する
+    async fn find_checkouts(&self, book_ids: &[BookId]) -> AppResult<HashMap<BookId, Checkout>> {
+        let res = sqlx::query_as!(
+            BookCheckoutRow,
+            r#"
+                SELECT
+                c.checkout_id,
+                c.book_id,
+                u.user_id,
+                u.name AS user_name,
+                c.checked_out_at
+                FROM checkouts AS c
+                INNER JOIN users AS u USING(user_id)
+                WHERE book_id = ANY($1)
+                ;
+            "#,
+            book_ids as _
+        )
+        .fetch_all(self.db.inner_ref())
+        .await
+        .map_err(AppError::SpecificOperationError)?
+        .into_iter()
+        .map(|checkout| (checkout.book_id, Checkout::from(checkout)))
+        .collect();
+
+        Ok(res)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -219,7 +266,6 @@ mod tests {
             isbn: "Test ISBN".into(),
             description: "Test Description".into(),
         };
-
         repo.create(book, user.id).await?;
         // find_all を実行するためには BookListOptions 型の値が必要なので作る。
         let options = BookListOptions {
@@ -228,11 +274,9 @@ mod tests {
         };
         let res = repo.find_all(options).await?;
         assert_eq!(res.items.len(), 1);
-
         let book_id = res.items[0].id;
         let res = repo.find_by_id(book_id).await?;
         assert!(res.is_some());
-
         let Book {
             id,
             title,
@@ -240,6 +284,7 @@ mod tests {
             isbn,
             description,
             owner,
+            ..
         } = res.unwrap();
         assert_eq!(id, book_id);
         assert_eq!(title, "Test Title");
@@ -247,7 +292,6 @@ mod tests {
         assert_eq!(isbn, "Test ISBN");
         assert_eq!(description, "Test Description");
         assert_eq!(owner.name, "Test User");
-
         Ok(())
     }
 }
