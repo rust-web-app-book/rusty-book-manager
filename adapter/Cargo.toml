@@ -1,0 +1,12 @@
+[package]
+name = "adapter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+kernel.workspace = true
+shared.workspace = true
+async-trait.workspace = true
+derive-new.workspace = true
+anyhow.workspace = true
+sqlx.workspace = true
