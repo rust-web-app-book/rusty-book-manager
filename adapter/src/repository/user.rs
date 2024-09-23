@@ -180,3 +180,88 @@ fn verify_password(password: &str, hash: &str) -> AppResult<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::UserRepositoryImpl;
+    use crate::database::ConnectionPool;
+    use kernel::{
+        model::{
+            id::UserId,
+            role::Role,
+            user::{
+                event::{CreateUser, DeleteUser, UpdateUserPassword, UpdateUserRole},
+                User,
+            },
+        },
+        repository::user::UserRepository,
+    };
+    use std::str::FromStr;
+
+    #[sqlx::test(fixtures("common"))]
+    async fn test_find_current_user(pool: sqlx::PgPool) -> anyhow::Result<()> {
+        let repo = UserRepositoryImpl::new(ConnectionPool::new(pool.clone()));
+        let current_user_id = UserId::from_str("5b4c96ac-316a-4bee-8e69-cac5eb84ff4c")?;
+        let me = repo.find_current_user(current_user_id).await?;
+        assert!(me.is_some());
+        assert_eq!(
+            me,
+            Some(User {
+                id: UserId::from_str("5b4c96ac-316a-4bee-8e69-cac5eb84ff4c")?,
+                email: "eleazar.fig@example.com".into(),
+                name: "Eleazar Fig".into(),
+                role: Role::Admin,
+            })
+        );
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures("common"))]
+    async fn test_users(pool: sqlx::PgPool) -> anyhow::Result<()> {
+        let repo = UserRepositoryImpl::new(ConnectionPool::new(pool.clone()));
+
+        // create
+        let event = CreateUser {
+            name: "Test".into(),
+            email: "test@example.com".into(),
+            password: "dummy".into(),
+        };
+        let user = repo.create(event).await?;
+
+        {
+            // update_password
+            let event = UpdateUserPassword {
+                user_id: user.id,
+                current_password: "dummy".into(),
+                new_password: "new_password".into(),
+            };
+            repo.update_password(event).await?;
+
+            // update_role
+            let event = UpdateUserRole {
+                user_id: user.id,
+                role: Role::Admin,
+            };
+            repo.update_role(event).await?;
+        }
+
+        // find
+        let user_found = repo.find_current_user(user.id).await?;
+        assert_eq!(user_found.unwrap().id, user.id);
+
+        let users = repo.find_all().await?;
+        assert!(!users.is_empty());
+
+        {
+            // delete
+            let event = DeleteUser { user_id: user.id };
+            repo.delete(event).await?;
+        }
+
+        let user_deleted = repo.find_current_user(user.id).await?;
+        assert!(user_deleted.is_none());
+
+        Ok(())
+    }
+}

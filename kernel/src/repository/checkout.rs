@@ -8,6 +8,7 @@ use crate::model::{
 use async_trait::async_trait;
 use shared::error::AppResult;
 
+#[mockall::automock]
 #[async_trait]
 pub trait CheckoutRepository: Send + Sync {
     // 貸し出し操作を行う

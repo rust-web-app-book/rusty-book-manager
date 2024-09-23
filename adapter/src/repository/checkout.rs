@@ -350,3 +350,226 @@ impl CheckoutRepositoryImpl {
         Ok(res)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::Utc;
+    use kernel::model::checkout::CheckoutBook;
+
+    use super::*;
+    use std::str::FromStr;
+
+    fn init_repo(pool: sqlx::PgPool) -> (CheckoutRepositoryImpl, UserId, UserId, BookId) {
+        let repo = CheckoutRepositoryImpl::new(ConnectionPool::new(pool));
+
+        // 事前登録したユーザー＆蔵書のID（fixtures/checkout.sql参照）
+        let user_id1 = UserId::from_str("9582f9de-0fd1-4892-b20c-70139a7eb95b").unwrap();
+        let user_id2 = UserId::from_str("050afe56-c3da-4448-8e4d-6f44007d2ca5").unwrap();
+        let book_id1 = BookId::from_str("9890736e-a4e4-461a-a77d-eac3517ef11b").unwrap();
+
+        (repo, user_id1, user_id2, book_id1)
+    }
+
+    #[sqlx::test(fixtures("common", "checkout"))]
+    async fn test_checkout_and_return(pool: sqlx::PgPool) -> anyhow::Result<()> {
+        let (repo, user_id1, user_id2, book_id1) = init_repo(pool);
+
+        // 初期状態は貸し出し書籍は0
+        let res = repo.find_unreturned_by_user_id(user_id1).await?;
+        assert!(res.is_empty());
+        let res = repo.find_unreturned_by_user_id(user_id2).await?;
+        assert!(res.is_empty());
+        let co = repo.find_unreturned_by_book_id(book_id1).await?;
+        assert!(co.is_none());
+
+        // 存在しない蔵書への貸し出しは失敗する
+        {
+            let res = repo
+                .create(CreateCheckout {
+                    book_id: BookId::new(),
+                    checked_out_by: user_id1,
+                    checked_out_at: Utc::now(),
+                })
+                .await;
+            assert!(matches!(res, Err(AppError::EntityNotFound(_))));
+        }
+
+        // book_idの蔵書をuser_id1に貸し出し
+        {
+            repo.create(CreateCheckout {
+                book_id: book_id1,
+                checked_out_by: user_id1,
+                checked_out_at: Utc::now(),
+            })
+            .await?;
+
+            let co = repo.find_unreturned_by_book_id(book_id1).await?;
+            assert!(
+                matches!(co, Some(Checkout{checked_out_by,book:CheckoutBook{book_id,..},..}) if book_id == book_id1 && checked_out_by == user_id1)
+            );
+
+            // user_id1に貸出中の状態でuser_id2への貸し出しは失敗する
+            let res = repo
+                .create(CreateCheckout {
+                    book_id: book_id1,
+                    checked_out_by: user_id2,
+                    checked_out_at: Utc::now(),
+                })
+                .await;
+            assert!(res.is_err());
+
+            let co = co.unwrap();
+
+            // 存在しない書籍への返却は失敗する
+            let res = repo
+                .update_returned(UpdateReturned {
+                    checkout_id: co.id,
+                    book_id: BookId::new(),
+                    returned_by: user_id1,
+                    returned_at: Utc::now(),
+                })
+                .await;
+            assert!(matches!(res, Err(AppError::EntityNotFound(_))));
+
+            // 存在しないCheckoutIdの貸し出しに対する返却は失敗する
+            let res = repo
+                .update_returned(UpdateReturned {
+                    checkout_id: CheckoutId::new(),
+                    book_id: book_id1,
+                    returned_by: user_id1,
+                    returned_at: Utc::now(),
+                })
+                .await;
+            assert!(matches!(res, Err(AppError::UnprocessableEntity(_))));
+
+            // user_id1への貸し出しで、他のユーザーからの返却は失敗する
+            let res = repo
+                .update_returned(UpdateReturned {
+                    checkout_id: co.id,
+                    book_id: book_id1,
+                    returned_by: user_id2,
+                    returned_at: Utc::now(),
+                })
+                .await;
+            assert!(matches!(res, Err(AppError::UnprocessableEntity(_))));
+
+            // 成功する返却
+            repo.update_returned(UpdateReturned {
+                checkout_id: co.id,
+                book_id: book_id1,
+                returned_by: user_id1,
+                returned_at: Utc::now(),
+            })
+            .await?;
+        }
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures("common", "checkout"))]
+    async fn test_checkout_list(pool: sqlx::PgPool) -> anyhow::Result<()> {
+        let (repo, user_id1, user_id2, book_id1) = init_repo(pool);
+
+        // 初回の貸し出し
+        {
+            repo.create(CreateCheckout {
+                book_id: book_id1,
+                checked_out_by: user_id1,
+                checked_out_at: Utc::now(),
+            })
+            .await?;
+
+            let co = repo.find_unreturned_by_book_id(book_id1).await?.unwrap();
+
+            // リストの出力
+            {
+                let res = repo.find_unreturned_all().await?;
+                assert_eq!(res.len(), 1);
+
+                let res = repo.find_unreturned_by_user_id(user_id1).await?;
+                assert_eq!(res.len(), 1);
+
+                let res = repo.find_unreturned_by_user_id(user_id2).await?;
+                assert_eq!(res.len(), 0);
+
+                let res = repo.find_history_by_book_id(book_id1).await?;
+                assert_eq!(res.len(), 1);
+            }
+
+            repo.update_returned(UpdateReturned {
+                checkout_id: co.id,
+                book_id: book_id1,
+                returned_by: user_id1,
+                returned_at: Utc::now(),
+            })
+            .await?;
+
+            // リストの出力
+            {
+                let res = repo.find_unreturned_all().await?;
+                assert_eq!(res.len(), 0);
+
+                let res = repo.find_unreturned_by_user_id(user_id1).await?;
+                assert_eq!(res.len(), 0);
+
+                let res = repo.find_unreturned_by_user_id(user_id2).await?;
+                assert_eq!(res.len(), 0);
+
+                let res = repo.find_history_by_book_id(book_id1).await?;
+                assert_eq!(res.len(), 1);
+            }
+        }
+
+        // 2回目の貸し出し
+        {
+            repo.create(CreateCheckout {
+                book_id: book_id1,
+                checked_out_by: user_id2,
+                checked_out_at: Utc::now(),
+            })
+            .await?;
+
+            let co = repo.find_unreturned_by_book_id(book_id1).await?.unwrap();
+
+            // リストの出力
+            {
+                let res = repo.find_unreturned_all().await?;
+                assert_eq!(res.len(), 1);
+
+                let res = repo.find_unreturned_by_user_id(user_id1).await?;
+                assert_eq!(res.len(), 0);
+
+                let res = repo.find_unreturned_by_user_id(user_id2).await?;
+                assert_eq!(res.len(), 1);
+
+                let res = repo.find_history_by_book_id(book_id1).await?;
+                assert_eq!(res.len(), 2);
+            }
+
+            repo.update_returned(UpdateReturned {
+                checkout_id: co.id,
+                book_id: book_id1,
+                returned_by: user_id2,
+                returned_at: Utc::now(),
+            })
+            .await?;
+
+            // リストの出力
+            {
+                let res = repo.find_unreturned_all().await?;
+                assert_eq!(res.len(), 0);
+
+                let res = repo.find_unreturned_by_user_id(user_id1).await?;
+                assert_eq!(res.len(), 0);
+
+                let res = repo.find_unreturned_by_user_id(user_id2).await?;
+                assert_eq!(res.len(), 0);
+
+                let res = repo.find_history_by_book_id(book_id1).await?;
+                assert_eq!(res.len(), 2);
+            }
+        }
+
+        Ok(())
+    }
+}
