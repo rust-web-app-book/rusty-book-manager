@@ -1,0 +1,53 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        DATABASE_URL: ${DATABASE_URL}
+      network: host
+    ports:
+      - 8080:${PORT}
+    environment:
+      HOST: ${HOST}
+      PORT: ${PORT}
+      DATABASE_HOST: ${DATABASE_HOST}
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_USERNAME: ${DATABASE_USERNAME}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_NAME: ${DATABASE_NAME}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      AUTH_TOKEN_TTL: ${AUTH_TOKEN_TTL}
+      JAEGER_HOST: ${JAEGER_HOST}
+      JAEGER_PORT: ${JAEGER_PORT}
+    depends_on:
+      - redis
+      - postgres
+
+  redis:
+    image: redis:alpine
+    ports:
+      - ${REDIS_PORT_OUTER}:${REDIS_PORT_INNER}
+
+  postgres:
+    image: postgres:15
+    command: postgres -c log_destination=stderr -c log_statement=all -c log_connections=on -c log_disconnections=on
+    ports:
+      - ${DATABASE_PORT_OUTER}:${DATABASE_PORT_INNER}
+    volumes:
+      - db:/var/lib/postgres/data
+    environment:
+      POSTGRES_USER: ${DATABASE_USERNAME}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_NAME}
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${DATABASE_USERNAME}"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  db:
+    driver: local

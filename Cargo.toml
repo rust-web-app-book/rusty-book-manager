@@ -1,0 +1,74 @@
+[package]
+name = "my-book-manager"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "app"
+path = "src/bin/app.rs"
+
+[workspace]
+members = ["api", "kernel", "adapter", "shared", "registry"]
+
+[workspace.package]
+edition = "2021"
+publish = false
+license = "MIT"
+
+[workspace.dependencies]
+adapter = { path = "./adapter" }
+api = { path = "./api" }
+kernel = { path = "./kernel" }
+shared = { path = "./shared" }
+registry = { path = "./registry" }
+async-trait = "0.1.74"
+anyhow = "1.0.75"
+axum = { version = "0.7.5", features = ["macros"] }
+derive-new = "0.6.0"
+utoipa = { version = "4.1.0", features = ["axum_extras", "uuid", "chrono"] }
+uuid = { version = "1.4.0", features = ["v4", "serde"] }
+chrono = { version = "0.4.26", default-features = false, features = ["serde"] }
+serde = { version = "1.0.174", features = ["derive"] }
+secrecy = "0.8.0"
+sqlx = { version = "0.7.3", features = [
+    "runtime-tokio",
+    "uuid",
+    "chrono",
+    "macros",
+    "postgres",
+    "migrate",
+] }
+strum = { version = "0.26.2", features = ["derive"] }
+thiserror = "1.0.44"
+tokio = { version = "1.37.0", features = ["full"] }
+mockall = "0.11.4"
+redis = { version = "0.25.3", features = ["tokio-rustls-comp"] }
+bcrypt = "0.15.0"
+itertools = "0.11.0"
+tower = "0.4.13"
+tracing = { version = "0.1.37", features = ["log"] }
+axum-extra = { version = "0.9.3", features = ["typed-header"] }
+tokio-stream = "0.1.14"
+garde = { version = "0.18.0", features = ["derive", "email"] }
+
+[dependencies]
+tower-http = { version = "0.5.0", features = ["cors", "trace"] }
+adapter.workspace = true
+api.workspace = true
+shared.workspace = true
+registry.workspace = true
+anyhow.workspace = true
+axum.workspace = true
+utoipa.workspace = true
+utoipa-redoc = { version = "2.0.0", features = ["axum"] }
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json"] }
+opentelemetry = "0.21.0"
+tracing-opentelemetry = "0.22.0"
+opentelemetry-jaeger = { version = "0.20.0", features = ["rt-tokio"] }
+
+[profile.dev.package.sqlx-macros]
+opt-level = 3
