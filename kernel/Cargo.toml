@@ -15,6 +15,7 @@ serde.workspace = true
 uuid.workspace = true
 strum.workspace = true
 sqlx.workspace = true
+utoipa.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true

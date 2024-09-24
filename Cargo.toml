@@ -28,6 +28,7 @@ anyhow = "1.0.75"
 axum = { version = "0.7.5", features = ["macros"] }
 derive-new = "0.6.0"
 utoipa = { version = "4.1.0", features = ["axum_extras", "uuid", "chrono"] }
+utoipa-redoc = { version = "2.0.0", features = ["axum"] }
 uuid = { version = "1.4.0", features = ["v4", "serde"] }
 chrono = { version = "0.4.26", default-features = false, features = ["serde"] }
 serde = { version = "1.0.174", features = ["derive"] }
@@ -62,13 +63,14 @@ registry.workspace = true
 anyhow.workspace = true
 axum.workspace = true
 utoipa.workspace = true
-utoipa-redoc = { version = "2.0.0", features = ["axum"] }
+utoipa-redoc.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json"] }
 opentelemetry = "0.21.0"
 tracing-opentelemetry = "0.22.0"
 opentelemetry-jaeger = { version = "0.20.0", features = ["rt-tokio"] }
+opentelemetry_sdk = { version = "0.21.2", features = ["rt-tokio"] }
 
 [profile.dev.package.sqlx-macros]
 opt-level = 3

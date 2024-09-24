@@ -36,19 +36,24 @@ JAEGER_PORT = 6831
 
 [tasks.before-build]
 run_task = [
-    { name = [
-        "compose-up-db",
-        "migrate",
-        "compose-up-redis",
-    ] },
+  { name = [
+    "compose-up-db",
+    "migrate",
+    "compose-up-redis",
+    "compose-up-jaeger",
+  ] },
 ]
 
 [tasks.compose-build-app]
 extend = "set-env-local"
 command = "docker"
 args = [
-  "compose", "build", "app",
-  "--build-arg", "BUILDKIT_INLINE_CACHE=1", "${@}"
+  "compose",
+  "build",
+  "app",
+  "--build-arg",
+  "BUILDKIT_INLINE_CACHE=1",
+  "${@}",
 ]
 
 [tasks.run]
@@ -103,12 +108,17 @@ args = ["clippy", "--all", "--all-targets", "${@}"]
 [tasks.test]
 extend = "set-env-local"
 install_crate = { crate_name = "cargo-nextest", binary = "cargo", test_arg = [
-  "nextest", "--help",
+  "nextest",
+  "--help",
 ] }
 command = "cargo"
 args = [
-  "nextest", "run", "--workspace",
-  "--status-level", "all", "--test-threads=1",
+  "nextest",
+  "run",
+  "--workspace",
+  "--status-level",
+  "all",
+  "--test-threads=1",
 ]
 
 [tasks.clippy-ci]
@@ -144,21 +154,35 @@ args = ["${@}", "--source", "adapter/migrations"]
 extend = "set-env-local"
 command = "docker"
 args = [
-  "run", "-it", "--rm",
-  "--network", "host",
-  "-v", "${PWD}:/work",
-  "postgres:15", "psql", "${DATABASE_URL}", "${@}"
+  "run",
+  "-it",
+  "--rm",
+  "--network",
+  "host",
+  "-v",
+  "${PWD}:/work",
+  "postgres:15",
+  "psql",
+  "${DATABASE_URL}",
+  "${@}",
 ]
 
 [tasks.initial-setup]
 extend = "set-env-local"
 command = "docker"
 args = [
-  "run", "-it", "--rm",
-  "--network", "host",
-  "-v", "${PWD}:/work",
-  "postgres:15", "psql", "${DATABASE_URL}",
-  "-f", "/work/data/initial_setup.sql"
+  "run",
+  "-it",
+  "--rm",
+  "--network",
+  "host",
+  "-v",
+  "${PWD}:/work",
+  "postgres:15",
+  "psql",
+  "${DATABASE_URL}",
+  "-f",
+  "/work/data/initial_setup.sql",
 ]
 
 
@@ -178,6 +202,11 @@ args = ["compose", "up", "-d", "postgres"]
 extend = "set-env-docker"
 command = "docker"
 args = ["compose", "up", "-d", "redis"]
+
+[tasks.compose-up-jaeger]
+extend = "set-env-docker"
+command = "docker"
+args = ["compose", "up", "-d", "jaeger"]
 
 [tasks.compose-down]
 extend = "set-env-docker"

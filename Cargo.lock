@@ -1093,6 +1093,7 @@ dependencies = [
  "shared",
  "sqlx",
  "strum",
+ "utoipa",
  "uuid",
 ]
 
@@ -1251,6 +1252,7 @@ dependencies = [
  "axum",
  "opentelemetry",
  "opentelemetry-jaeger",
+ "opentelemetry_sdk",
  "registry",
  "shared",
  "tokio",
